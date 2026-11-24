@@ -1,6 +1,9 @@
 venv/
 __pycache__/
 *.pyc
-todos.json
 .env
 .DS_Store
+data/*
+!data/.gitkeep
+*.tmp
+.pytest_cache/

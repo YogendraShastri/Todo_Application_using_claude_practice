@@ -22,22 +22,40 @@ A small full-stack todo app built as a **learning sandbox for exploring [Claude 
 |----------|----------------------------------------------|
 | Backend  | Python 3, [FastAPI](https://fastapi.tiangolo.com/), [Uvicorn](https://www.uvicorn.org/) |
 | Frontend | HTML5, CSS3, vanilla JavaScript (no framework) |
-| Storage  | JSON file (`todos.json`)                     |
+| Storage  | JSON file (`data/todos.json`)                     |
 
 ## Project Structure
 
 ```
 .
-├── main.py            # FastAPI app: REST API + static file serving
-├── requirements.txt   # Python dependencies
-├── static/
-│   ├── index.html     # Page markup
-│   ├── style.css      # Styling (Vibrant Modern theme)
-│   └── app.js         # UI rendering and API calls
-├── todos.json         # Data store (created at runtime, git-ignored)
-├── CLAUDE.md          # Guidance for Claude Code in this repo
+├── run.py                       # Dev server entry point
+├── app/                         # Backend
+│   ├── main.py                  # create_app(): wires routers + static mount
+│   ├── core/config.py           # Settings (env-overridable)
+│   ├── api/
+│   │   ├── deps.py              # Dependency wiring (service <- repository)
+│   │   └── routes/              # todos.py (REST), pages.py (HTML)
+│   ├── schemas/todo.py          # Pydantic models
+│   ├── services/todo_service.py # Business rules (validation, not-found)
+│   └── repositories/            # Storage layer: base.py (interface),
+│                                #   json_repository.py, factory.py
+├── frontend/
+│   ├── pages/index.html
+│   └── static/{css,js,media}/   # js split into api.js / ui.js / main.js
+├── data/                        # Runtime data (git-ignored)
+├── tests/                       # pytest
+├── requirements.txt / requirements-dev.txt
+├── CLAUDE.md
 └── README.md
 ```
+
+## Adding SQLite later
+
+1. Create `app/repositories/sqlite_repository.py` implementing `TodoRepository`.
+2. Add a `"sqlite"` branch in `app/repositories/factory.py`.
+3. Run with `STORAGE_BACKEND=sqlite` (path via `SQLITE_PATH`).
+
+Routes and services need no changes.
 
 ## Getting Started
 
@@ -59,10 +77,10 @@ pip install -r requirements.txt
 ### Run
 
 ```bash
-python main.py
+python run.py
 ```
 
-Open <http://127.0.0.1:8000>. The server runs with hot reload, so edits to `main.py` and the files in `static/` are picked up automatically.
+Open <http://127.0.0.1:8000>. The server runs with hot reload, so edits to `app/` and `frontend/` are picked up automatically.
 
 ## API Reference
 
@@ -92,15 +110,14 @@ FastAPI also exposes interactive docs at <http://127.0.0.1:8000/docs>.
 
 ## Design Notes
 
-- **Storage:** todos are read from and written to `todos.json` on every request. Simple and transparent, but there is no locking, so it assumes a single user.
+- **Storage:** todos are read from and written to `data/todos.json` on every request. Simple and transparent, but there is no locking, so it assumes a single user.
 - **Frontend sync:** the UI calls `fetchTodos()` after every mutation to stay consistent with the server.
 - **No build step:** plain HTML/CSS/JS served as static files.
 
 ## Possible Improvements
 
-- Replace JSON storage with SQLite/PostgreSQL for concurrency safety
+- Add a SQLite repository (see above) for concurrency safety
 - Edit task titles; due dates and priorities
-- Automated tests (pytest + FastAPI `TestClient`)
 - User accounts and authentication
 - Docker setup
 

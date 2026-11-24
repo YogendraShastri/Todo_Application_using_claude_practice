@@ -2,50 +2,35 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Running the Application
+## Commands
 
 ```bash
-# Activate virtual environment (if not already active)
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start the development server (runs on http://127.0.0.1:8000)
-python main.py
+source venv/bin/activate          # venv is git-ignored; create with python3 -m venv venv
+pip install -r requirements-dev.txt  # or requirements.txt; fastapi, uvicorn (unpinned)
+python -m pytest                  # tests use a temp JSON file via dependency override
+python run.py                     # dev server on http://127.0.0.1:8000, hot reload on
 ```
 
-The server runs with hot-reload enabled—changes to `main.py`, `static/app.js`, or `static/index.html` trigger automatic reloads.
+- Interactive API docs: http://127.0.0.1:8000/docs
 
-## Architecture Overview
+## Architecture
 
-This is a simple full-stack todo application:
+Layered FastAPI backend (`app/`) plus a no-build vanilla JS frontend (`frontend/`).
 
-- **Backend**: FastAPI REST API in `main.py`
-  - REST endpoints under `/api/todos` for CRUD operations
-  - Static file serving for the frontend
-  - Single-page app index at `/`
-  
-- **Frontend**: HTML + vanilla JavaScript in `static/`
-  - `index.html`: Markup with Bootstrap styling
-  - `app.js`: Handles UI rendering and API calls
-  
-- **Data Storage**: JSON file (`todos.json`) persisted to disk
-  - No database; todos are loaded/saved as a JSON array
-  - Each todo has `id` (UUID), `title` (string), and `done` (boolean)
+- `app/main.py` — `create_app()`; `run.py` starts uvicorn.
+- `app/api/routes/` — `todos.py` (REST, maps service errors to HTTP) and `pages.py` (`GET /`). `app/api/deps.py` builds the cached `TodoService`.
+- `app/services/todo_service.py` — business rules (strip/empty-title, not-found).
+- `app/repositories/` — `TodoRepository` interface, `JsonTodoRepository`, and `factory.py` choosing by `STORAGE_BACKEND`. SQLite = new repository + factory branch.
+- `app/core/config.py` — settings/paths (`DATA_FILE`, `STORAGE_BACKEND`, `SQLITE_PATH`).
+- `frontend/pages/index.html`, `frontend/static/{css,js,media}`; JS is ES modules (`api.js`, `ui.js`, `main.js`). Mockup JPGs are in `static/media/mockups` (not used by the app).
+- `data/` — runtime data (git-ignored except `.gitkeep`). Todos are `{id: uuid4 str, title, done}`.
 
-## API Endpoints
+Routes: `GET/POST /api/todos`, `PATCH /api/todos/{id}` (toggles `done`; no body), `DELETE /api/todos/{id}`.
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/api/todos` | List all todos |
-| POST | `/api/todos` | Create a new todo |
-| PATCH | `/api/todos/{todo_id}` | Toggle todo done status |
-| DELETE | `/api/todos/{todo_id}` | Delete a todo |
-| GET | `/` | Serve index.html |
+## Design notes that aren't obvious from a single file
 
-## Key Design Notes
-
-- **Validation**: Empty titles are rejected (400) at creation time in both frontend and backend
-- **Concurrency**: No locking mechanism; assumes single user. For multi-user scenarios, would need database and proper concurrency handling
-- **Frontend data fetching**: `fetchTodos()` is called after every mutation to keep UI in sync
+- **Persistence is read-modify-write on every request** in the JSON repository (re-reads and rewrites the whole file). Writes are atomic (temp file + replace) but there is no locking, so concurrent requests can lose updates. Single-user assumption.
+- **Responses use the `Todo` Pydantic `response_model`**; `TodoCreate` validates input.
+- **Empty-title validation is duplicated**: the frontend skips blank input silently, and the service raises `EmptyTitleError` (400) after `.strip()`. Keep both in sync.
+- **Frontend sync model**: every mutation (in `main.js`) calls `refresh()`, which refetches and re-renders the list via `renderTodos()`. Responses are not checked (`res.ok`), so API errors are currently invisible in the UI.
+- Task text is rendered with `textContent` (safe); only the static trash-icon SVG uses `innerHTML`. Preserve that when changing rendering.
